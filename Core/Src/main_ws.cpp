@@ -46,21 +46,24 @@ void StartSensorTask(void *argument) {
 
     for(;;)
     {
-        const auto ret = BMP580::readTemperature();
-        if (ret == ErrorCode::Success) {
-            const float temperature = BMP580::getTemperature();
-            char output[32];
-            const int len = snprintf(output, sizeof(output), "%.2f C\r\n", temperature);
-            HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output), len, HAL_MAX_DELAY);
-        }
-        if (ret == ErrorCode::ErrorRx) {
-            const auto msg = errorString(ret);
+        const auto tempRet = BMP580::readTemperature();
+        const auto presRet = BMP580::readPressure();
+
+        if (tempRet == ErrorCode::ErrorRx || presRet == ErrorCode::ErrorRx) {
+            const auto msg = errorString(ErrorCode::ErrorRx);
             HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
         }
-        if (ret == ErrorCode::ErrorRx) {
-            const auto msg = errorString(ret);
+        if (tempRet == ErrorCode::ErrorTx || presRet == ErrorCode::ErrorTx) {
+            const auto msg = errorString(ErrorCode::ErrorTx);
             HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
         }
+
+        const float temperature = BMP580::getTemperature();
+        const float pressure = BMP580::getPressure();
+        char output[32];
+        const int len = snprintf(output, sizeof(output), "%.2f C    %.2f kPa\r\n", temperature, pressure );
+        HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output), len, HAL_MAX_DELAY);
+
         osDelay(500);
     }
     osThreadTerminate(nullptr);
