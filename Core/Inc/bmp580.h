@@ -9,6 +9,7 @@
 #include "helpers.h"
 #include "stm32f4xx_hal.h"
 
+/// I2C Temperature and Pressure Sensor
 class BMP580 {
 public:
     static ErrorCode start(I2C_HandleTypeDef* hi2c);

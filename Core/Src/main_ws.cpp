@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "bme280.h"
 #include "bmp580.h"
 #include "cmsis_os.h"
 #include "stm32f4xx_hal.h"
@@ -30,7 +31,7 @@ extern UART_HandleTypeDef huart2;
 
 void main_ws(void) {
     sensorTaskHandle = osThreadNew(StartSensorTask, nullptr, &sensorTask_attributes);
-    //displayTaskHandle = osThreadNew(StartDisplayTask, nullptr, &displayTask_attributes);
+    displayTaskHandle = osThreadNew(StartDisplayTask, nullptr, &displayTask_attributes);
 }
 
 void StartSensorTask(void *argument) {
@@ -44,31 +45,42 @@ void StartSensorTask(void *argument) {
         HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(startMsg), strlen(startMsg), HAL_MAX_DELAY);
     }
 
+    if (BME280::start(&hi2c1) == ErrorCode::Failure) {
+        char startFailMsg[] = "ERROR: BME280 failed to start.\r\n";
+        HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(startFailMsg), strlen(startFailMsg), HAL_MAX_DELAY);
+        osThreadTerminate(nullptr);
+    } else {
+        char startMsg[] = "BME280 powered on!\r\n";
+        HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(startMsg), strlen(startMsg), HAL_MAX_DELAY);
+    }
+
     for(;;)
     {
         const auto tempRet = BMP580::readTemperature();
         const auto presRet = BMP580::readPressure();
+        const auto humRet   = BME280::readHumidity();
 
-        if (tempRet == ErrorCode::ErrorRx || presRet == ErrorCode::ErrorRx) {
+        if (tempRet == ErrorCode::ErrorRx || presRet == ErrorCode::ErrorRx || humRet == ErrorCode::ErrorRx) {
             const auto msg = errorString(ErrorCode::ErrorRx);
             HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
         }
-        if (tempRet == ErrorCode::ErrorTx || presRet == ErrorCode::ErrorTx) {
+        if (tempRet == ErrorCode::ErrorTx || presRet == ErrorCode::ErrorTx || humRet == ErrorCode::ErrorTx) {
             const auto msg = errorString(ErrorCode::ErrorTx);
             HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
         }
 
         const float temperature = BMP580::getTemperature();
         const float pressure = BMP580::getPressure();
-        char output[32];
-        const int len = snprintf(output, sizeof(output), "%.2f C    %.2f kPa\r\n", temperature, pressure );
+        const float humidity = BME280::getHumidity();
+        char output[64];
+        const int len = snprintf(output, sizeof(output), "%.2f C    %.2f kPa    %.1f%% Humidity\r\n", temperature, pressure, humidity);
         HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output), len, HAL_MAX_DELAY);
 
-        osDelay(500);
+        osDelay(5000);
     }
     osThreadTerminate(nullptr);
 }
 
 void StartDisplayTask(void *argument) {
-    osThreadTerminate(nullptr);
+    osThreadTerminate(displayTaskHandle);
 }

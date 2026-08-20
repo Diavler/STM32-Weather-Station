@@ -7,7 +7,7 @@
 #include <cstdint>
 #include "helpers.h"
 
-static constexpr uint8_t BMP580_ADDR            = 0x47 << 1;
+static constexpr uint8_t BMP580_ADDR            = 0x47 << 1; // SDO = 1
 static constexpr uint8_t REG_TEMP_DATA_XLSB     = 0x1D;
 static constexpr uint8_t REG_PRES_DATA_XLSB     = 0x20;
 static constexpr uint8_t REG_OSR_CONFIG         = 0x36;
@@ -19,7 +19,7 @@ static constexpr uint8_t OSR_PRESS_EN           = 0b01000000;
 /// @return ErrorCode
 ErrorCode BMP580::start(I2C_HandleTypeDef* hi2c) {
     hi2c_ptr = hi2c;
-    // Power on
+    // Power on (set in odr_config reg)
     uint8_t powcfg[2];
     powcfg[0] = REG_ODR_CONFIG;
     powcfg[1] = 0x01;
@@ -27,9 +27,10 @@ ErrorCode BMP580::start(I2C_HandleTypeDef* hi2c) {
     if (ret != HAL_OK) {
         return ErrorCode::Failure;
     }
-    // Enable Pressure + Temperature
+    // Enable Pressure + Temperature (set press_en in osr_config reg)
     uint8_t OSR_CONFIG = 0;
-    ret = HAL_I2C_Master_Receive(hi2c_ptr, BMP580_ADDR, &OSR_CONFIG, 1, HAL_MAX_DELAY);
+    ret = HAL_I2C_Mem_Read(hi2c_ptr, BMP580_ADDR, REG_OSR_CONFIG,
+        I2C_MEMADD_SIZE_8BIT, &OSR_CONFIG, 1, HAL_MAX_DELAY );
     if (ret != HAL_OK) {
         return ErrorCode::ErrorRx;
     }

@@ -297,8 +297,7 @@ static void MX_GPIO_Init(void)
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
-  osThreadTerminate(NULL);
-  //vTaskDelete(defaultTaskHandle);
+  osThreadTerminate(defaultTaskHandle);
   /* USER CODE END 5 */
 }
 
