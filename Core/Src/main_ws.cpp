@@ -18,10 +18,10 @@ constexpr osThreadAttr_t sensorTask_attributes = {
     .stack_size = 1024 * 4,
     .priority = osPriorityHigh,
   };
-/* Definitions for displayTask */
-static osThreadId_t displayTaskHandle;
-constexpr osThreadAttr_t displayTask_attributes = {
-    .name = "displayTask",
+/* Definitions for radioTask */
+static osThreadId_t radioTaskHandle;
+constexpr osThreadAttr_t radioTask_attributes = {
+    .name = "radioTask",
     .stack_size = 256 * 4,
     .priority = osPriorityNormal,
   };
@@ -31,7 +31,7 @@ extern UART_HandleTypeDef huart2;
 
 void main_ws(void) {
     sensorTaskHandle = osThreadNew(StartSensorTask, nullptr, &sensorTask_attributes);
-    displayTaskHandle = osThreadNew(StartDisplayTask, nullptr, &displayTask_attributes);
+    radioTaskHandle = osThreadNew(StartRadioTask, nullptr, &radioTask_attributes);
 }
 
 void StartSensorTask(void *argument) {
@@ -81,6 +81,6 @@ void StartSensorTask(void *argument) {
     osThreadTerminate(nullptr);
 }
 
-void StartDisplayTask(void *argument) {
-    osThreadTerminate(displayTaskHandle);
+void StartRadioTask(void *argument) {
+    osThreadTerminate(radioTaskHandle);
 }

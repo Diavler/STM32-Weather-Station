@@ -39,10 +39,10 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/Src/bmp580.cpp
         Core/Inc/helpers.h
         Core/Src/helpers.cpp
-        Core/Inc/ssd1315.h
-        Core/Src/ssd1315.cpp
         Core/Inc/bme280.h
-        Core/Src/bme280.cpp)
+        Core/Src/bme280.cpp
+        Core/Inc/rfm95w.h
+        Core/Src/rfm95w.cpp)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
