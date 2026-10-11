@@ -9,6 +9,7 @@
 #include "bme280.h"
 #include "bmp580.h"
 #include "cmsis_os.h"
+#include "rfm95w.h"
 #include "stm32f4xx_hal.h"
 
 /* Definitions for sensorTask */
@@ -27,6 +28,7 @@ constexpr osThreadAttr_t radioTask_attributes = {
   };
 
 extern I2C_HandleTypeDef hi2c1;
+extern SPI_HandleTypeDef hspi1;
 extern UART_HandleTypeDef huart2;
 
 void main_ws(void) {
@@ -82,5 +84,11 @@ void StartSensorTask(void *argument) {
 }
 
 void StartRadioTask(void *argument) {
+    osDelay(10000);
+    RFM95W::start(&hspi1);
+    uint8_t tempbuf = RFM95W::getBuf();
+    char output[8];
+    const int len = snprintf(output, sizeof(output), "%d\r\n", tempbuf);
+    HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output), len, HAL_MAX_DELAY);
     osThreadTerminate(radioTaskHandle);
 }

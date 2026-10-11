@@ -11,7 +11,7 @@ extern "C" {
 
 void main_ws(void);
 void StartSensorTask(void *argument);
-void StartDisplayTask(void *argument);
+void StartRadioTask(void *argument);
 
 #ifdef __cplusplus
 }
