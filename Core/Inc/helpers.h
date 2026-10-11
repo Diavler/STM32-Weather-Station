@@ -25,4 +25,10 @@ constexpr const char8_t* errorString(const ErrorCode error) {
     }
 }
 
+struct sensorBundle {
+    float temperature;
+    float pressure;
+    float humidity;
+};
+
 #endif //WEATHERSTATION_HELPERS_H

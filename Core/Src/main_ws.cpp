@@ -9,8 +9,12 @@
 
 #include "bme280.h"
 #include "bmp580.h"
-#include "cmsis_os.h"
 #include "rfm95w.h"
+
+// Todo: look into CMSIS2 wrappers vs FreeRTOS
+#include "cmsis_os2.h"
+#include "freertos_os2.h"
+#include "task.h"
 #include "stm32f4xx_hal.h"
 
 /* Definitions for sensorTask */
@@ -76,12 +80,15 @@ void StartSensorTask(void *argument) {
             sendUARTErrorTX();
         }
 
-        const float temperature = BMP580::getTemperature();
-        const float pressure = BMP580::getPressure();
-        const float humidity = BME280::getHumidity();
+        const sensorBundle sensorReading{
+            BMP580::getTemperature(), BMP580::getPressure(), BME280::getHumidity()
+        };
         char output[64];
-        const int len = snprintf(output, sizeof(output), "%.2f C    %.2f kPa    %.1f%% Humidity\r\n", temperature, pressure, humidity);
+        const int len = snprintf(output, sizeof(output), "%.2f C    %.2f kPa    %.1f%% Humidity\r\n",
+            sensorReading.temperature, sensorReading.pressure, sensorReading.humidity);
         HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output), len, HAL_MAX_DELAY);
+
+        // Todo: implement a FreeRTOS queue that sends [temperature, pressure, humidity]
 
         osDelay(5000);
     }
