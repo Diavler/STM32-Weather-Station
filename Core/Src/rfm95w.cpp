@@ -3,10 +3,9 @@
 //
 
 #include "rfm95w.h"
+#include <array>
 
-static constexpr uint8_t REG_FIFO       = 0x00;
 static constexpr uint8_t REG_OPMODE     = 0x01;
-
 static constexpr uint8_t MODE_SLEEP         = 0x07;
 static constexpr uint8_t MODE_STANDBY       = 0b001;
 static constexpr uint8_t MODE_TX            = 0b011;
@@ -30,6 +29,15 @@ static constexpr uint8_t REG_MCONF3     = 0x26;
 static constexpr uint8_t SET_CRC        = 0b100;
 static constexpr uint8_t REG_PACONF     = 0x09;
 static constexpr uint8_t SET_PABOOST    = 0x80;
+static constexpr uint8_t REG_DIOMAP1    = 0x40;
+static constexpr uint8_t SET_DIO0TX     = 0x60;
+
+// TX / RX
+static constexpr uint8_t MAX_PAYSIZE    = 0x20; // 32 bytes payload
+static constexpr uint8_t REG_FIFO       = 0x00;
+static constexpr uint8_t REG_IRQ_FLAGS  = 0x12;
+static constexpr uint8_t MASK_TXDONE    = 0x08;
+static constexpr uint8_t REG_PAYLEN     = 0x22;
 
 
 // Todo: add error reporting
@@ -49,7 +57,7 @@ uint8_t RFM95W::readRegister(const uint8_t addr) {
 
 uint8_t RFM95W::writeRegister(const uint8_t addr, const uint8_t val) {
     if (hspi_ptr == nullptr) {
-        return 67;
+        return 0x00;
     }
     uint8_t tx[2] = {static_cast<uint8_t>(addr | 0x80), val};
     uint8_t rx[2] = {0,0};
@@ -83,7 +91,6 @@ ErrorCode RFM95W::start(SPI_HandleTypeDef* hspi) {
     opmode |= MODE_LORA;
     writeRegister(REG_OPMODE, opmode | MODE_STANDBY);
     opmode |= MODE_STANDBY;
-    buf = readRegister(REG_OPMODE);
 
     // Set Freq to 915MHz
     writeRegister(REG_FR_MSB, VAL_FR_MSB);
@@ -98,9 +105,52 @@ ErrorCode RFM95W::start(SPI_HandleTypeDef* hspi) {
     uint8_t paConfig = readRegister(REG_PACONF);
     writeRegister(REG_PACONF, paConfig | SET_PABOOST);
 
+    // Set DIO0/G0 Mapping to TxDone
+    uint8_t regDioMapping = readRegister(REG_DIOMAP1);
+    writeRegister(REG_DIOMAP1, regDioMapping | SET_DIO0TX);
+
     return ErrorCode::Success;
 }
 
-uint8_t RFM95W::getBuf() {
-    return buf;
+/// Transmit a buffer with len bytes
+/// @param buf data to transmit
+/// @param len # of bytes to transmit
+/// @return
+ErrorCode RFM95W::transmit(std::span<uint8_t> buf) {
+    if (hspi_ptr == nullptr || buf.size() > MAX_PAYSIZE) {
+        return ErrorCode::ErrorTx;
+    }
+    // Clear IRQ
+    writeRegister(REG_IRQ_FLAGS, 0xFF);
+
+    // Assemble buffer
+    std::array<uint8_t, MAX_PAYSIZE + 1> tx{};
+    tx[0] = static_cast<uint8_t>(REG_FIFO | 0x80);
+    std::copy(buf.begin(), buf.end(), tx.begin()+1);
+
+    // Set TX mode
+    auto opmode = readRegister(REG_OPMODE);
+    writeRegister(REG_OPMODE, opmode | MODE_TX);
+
+    // Transmit
+    writeRegister(REG_PAYLEN, tx.size()-1);
+    resetCS();
+    HAL_SPI_Transmit(hspi_ptr, tx.data(), tx.size(), HAL_MAX_DELAY);
+    setCS();
+
+    return ErrorCode::Success;
+}
+
+ErrorCode RFM95W::clearIRQ() {
+    const uint8_t irq_flags = readRegister(REG_IRQ_FLAGS);
+    const bool txdoneSet = irq_flags & MASK_TXDONE;
+    writeRegister(REG_IRQ_FLAGS, irq_flags | MASK_TXDONE);
+    return txdoneSet ? ErrorCode::Success : ErrorCode::ErrorTx;
+}
+
+/// Read into a buffer
+/// @param buf buffer to read into
+/// @return
+ErrorCode RFM95W::receive(std::span<uint8_t> buf) {
+    return ErrorCode::Success;
 }

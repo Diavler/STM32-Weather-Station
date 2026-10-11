@@ -3,6 +3,7 @@
 //
 #include "main_ws.h"
 
+#include <array>
 #include <cstdio>
 #include <cstring>
 
@@ -36,6 +37,12 @@ void main_ws(void) {
     radioTaskHandle = osThreadNew(StartRadioTask, nullptr, &radioTask_attributes);
 }
 
+/// Temporary function to clean up errors. Todo: implement more elegant string / error handling
+static void sendUARTErrorTX() {
+    const auto msg = errorString(ErrorCode::ErrorTx);
+    HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
+}
+
 void StartSensorTask(void *argument) {
     // TODO: implement cleaner error codes + handling
     if (BMP580::start(&hi2c1) == ErrorCode::Failure) {
@@ -63,12 +70,10 @@ void StartSensorTask(void *argument) {
         const auto humRet   = BME280::readHumidity();
 
         if (tempRet == ErrorCode::ErrorRx || presRet == ErrorCode::ErrorRx || humRet == ErrorCode::ErrorRx) {
-            const auto msg = errorString(ErrorCode::ErrorRx);
-            HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
+            sendUARTErrorTX();
         }
         if (tempRet == ErrorCode::ErrorTx || presRet == ErrorCode::ErrorTx || humRet == ErrorCode::ErrorTx) {
-            const auto msg = errorString(ErrorCode::ErrorTx);
-            HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
+            sendUARTErrorTX();
         }
 
         const float temperature = BMP580::getTemperature();
@@ -84,11 +89,38 @@ void StartSensorTask(void *argument) {
 }
 
 void StartRadioTask(void *argument) {
-    osDelay(10000);
+    osDelay(500);
     RFM95W::start(&hspi1);
-    uint8_t tempbuf = RFM95W::getBuf();
-    char output[8];
-    const int len = snprintf(output, sizeof(output), "%d\r\n", tempbuf);
-    HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output), len, HAL_MAX_DELAY);
-    osThreadTerminate(radioTaskHandle);
+    BaseType_t taskWoken = pdTRUE;
+    constexpr TickType_t notifyTICKS = 250; // Todo: calculate proper value
+
+    uint8_t tempbuf = 0;
+    std::array<char, 8> output{};
+    const int len = snprintf(output.data(), output.size(), "%d\r\n", tempbuf);
+    for (;;) {
+        HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output.data()), len, HAL_MAX_DELAY);
+        xTaskNotifyStateClear(static_cast<TaskHandle_t>(radioTaskHandle));
+        std::array<uint8_t, 32> txBuf{};
+        txBuf[0] = 0x88; // Todo: replace dummy data with readin from senesor queue
+        auto transmitRet = RFM95W::transmit(txBuf);
+        if (transmitRet != ErrorCode::Success) {
+            sendUARTErrorTX();
+        }
+        ulTaskNotifyTake(taskWoken, notifyTICKS);
+        auto clearRet = RFM95W::clearIRQ();
+        if (clearRet != ErrorCode::Success) {
+            sendUARTErrorTX();
+        }
+        osDelay(5000);
+    }
+    osThreadTerminate(nullptr);
 }
+
+extern "C" void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if (GPIO_Pin == GPIO_PIN_9) {
+        BaseType_t taskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(static_cast<TaskHandle_t>(radioTaskHandle), &taskWoken);
+        portYIELD_FROM_ISR(taskWoken);
+    }
+}
+

@@ -7,6 +7,7 @@
 
 #include "helpers.h"
 #include "stm32f4xx_hal.h"
+#include <span>
 
 // Copy pasted from main.h: RST, G0, CS
 #define RST_Pin GPIO_PIN_7
@@ -21,7 +22,9 @@
 class RFM95W {
 public:
     static ErrorCode start(SPI_HandleTypeDef* hspi);
-    static uint8_t getBuf();
+    static ErrorCode transmit(std::span<uint8_t> buf);
+    static ErrorCode receive(std::span<uint8_t> buf);
+    static ErrorCode clearIRQ();
 private:
     inline static SPI_HandleTypeDef* hspi_ptr = nullptr;
     // Todo: change hardcoded GPIO pins to somewhere else
@@ -30,10 +33,6 @@ private:
     static void setCS() { HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET); }
     static uint8_t readRegister(uint8_t addr);
     static uint8_t writeRegister(uint8_t addr, uint8_t val);
-    // Internal Data
-    static inline uint8_t buf = 0;
-
-
 };
 
 #endif //WEATHERSTATION_RFM95W_H
