@@ -31,6 +31,9 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
+set(FREERTOS_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/FreeRTOS)
+set(FREERTOS_PORT ${FREERTOS_DIR}/portable/GCC/ARM_CM4F)
+
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME}
         Core/Inc/main_ws.h
@@ -54,11 +57,17 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+        ${FREERTOS_DIR}/tasks.c
+        ${FREERTOS_DIR}/queue.c
+        ${FREERTOS_DIR}/list.c
+        ${FREERTOS_DIR}/timers.c
+        ${FREERTOS_PORT}/port.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+        ${FREERTOS_DIR}/include
+        ${FREERTOS_PORT}
     # Add user defined include paths
 )
 
