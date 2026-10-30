@@ -22,7 +22,7 @@ ErrorCode BME280::start(I2C_HandleTypeDef* hi2c) {
     powcfg[1] = MODE_NORMAL | OVERSAMPLE_SIXTEEN << 5;
     HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(hi2c_ptr, BME280_ADDR, powcfg, 2, HAL_MAX_DELAY);
     if (ret != HAL_OK) {
-        return ErrorCode::Failure;
+        return ErrorCode::i2cError;
     }
 
     // Enable Humidity
@@ -30,7 +30,7 @@ ErrorCode BME280::start(I2C_HandleTypeDef* hi2c) {
     ret = HAL_I2C_Mem_Read(hi2c_ptr, BME280_ADDR, REG_CTRL_HUM,
         I2C_MEMADD_SIZE_8BIT, &CTRL_HUM_READ, 1, HAL_MAX_DELAY );
     if (ret != HAL_OK) {
-        return ErrorCode::ErrorRx;
+        return ErrorCode::i2cError;
     }
 
     uint8_t humcfg[2];
@@ -38,10 +38,10 @@ ErrorCode BME280::start(I2C_HandleTypeDef* hi2c) {
     humcfg[1] = OVERSAMPLE_ONE | CTRL_HUM_READ;
     ret = HAL_I2C_Master_Transmit(hi2c_ptr, BME280_ADDR, humcfg, 2, HAL_MAX_DELAY);
     if (ret != HAL_OK) {
-        return ErrorCode::Failure;
+        return ErrorCode::i2cError;
     }
     if (readCompReg() != HAL_OK) {
-        return ErrorCode::Failure;
+        return ErrorCode::i2cError;
     }
 
     uint8_t id = 0;
@@ -57,12 +57,12 @@ ErrorCode BME280::readHumidity() {
     buf[0] = REG_HUM_LSB;
     HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(hi2c_ptr, BME280_ADDR, buf, 1, HAL_MAX_DELAY);
     if (ret != HAL_OK) {
-        return ErrorCode::ErrorTx;
+        return ErrorCode::i2cError;
     }
     // Read 2 Bytes from HUM_MSB, HUM_LSB (Big Endian)
     ret = HAL_I2C_Master_Receive(hi2c_ptr, BME280_ADDR, buf, 2, HAL_MAX_DELAY);
     if (ret != HAL_OK) {
-        return ErrorCode::ErrorRx;
+        return ErrorCode::i2cError;
     }
     auto hum16 = static_cast<int16_t>(buf[0] << 8 | buf[1]);
     int32_t val = hum16;
@@ -91,12 +91,12 @@ ErrorCode BME280::readTemperature() {
     buf[0] = REG_TEMP_MSB;
     HAL_StatusTypeDef ret = HAL_I2C_Master_Transmit(hi2c_ptr, BME280_ADDR, buf, 1, HAL_MAX_DELAY);
     if (ret != HAL_OK) {
-        return ErrorCode::ErrorTx;
+        return ErrorCode::i2cError;
     }
     // Read 3 Bytes from TEMP_MSB, TEMP_LSB, TEMP_XLSB (Big Endian)
     ret = HAL_I2C_Master_Receive(hi2c_ptr, BME280_ADDR, buf, 3, HAL_MAX_DELAY);
     if (ret != HAL_OK) {
-        return ErrorCode::ErrorRx;
+        return ErrorCode::i2cError;
     }
     // temperature read in 20 bits
     const int32_t val = static_cast<int32_t>(buf[0]) << 12 | static_cast<int32_t>(buf[1]) << 4 | (buf[2] & 0xF0) >> 4;

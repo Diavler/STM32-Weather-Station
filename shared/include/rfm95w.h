@@ -8,6 +8,7 @@
 #include "helpers.h"
 #include "stm32f4xx_hal.h"
 #include <span>
+#include <expected>
 
 // Copy pasted from main.h: RST, G0, CS
 #define RST_Pin GPIO_PIN_7
@@ -31,8 +32,22 @@ private:
     static void reset();
     static void resetCS() { HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET); }
     static void setCS() { HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET); }
-    static uint8_t readRegister(uint8_t addr);
-    static uint8_t writeRegister(uint8_t addr, uint8_t val);
+    static std::expected<uint8_t, ErrorCode>  readRegister(uint8_t addr);
+    static ErrorCode writeRegister(uint8_t addr, uint8_t val);
+    static ErrorCode updateRegister(uint8_t addr, uint8_t mask, uint8_t val);
+};
+
+struct RegWrite
+{
+    uint8_t addr;
+    uint8_t val;
+};
+
+struct RegUpdate
+{
+    uint8_t addr;
+    uint8_t mask;
+    uint8_t val;
 };
 
 #endif //WEATHERSTATION_RFM95W_H

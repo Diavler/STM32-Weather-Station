@@ -6,7 +6,7 @@
 #define WEATHERSTATION_BMP580_H
 
 #include <cstdint>
-#include "helpers.h"
+#include "../../../shared/include/helpers.h"
 #include "stm32f4xx_hal.h"
 
 /// I2C Temperature and Pressure Sensor

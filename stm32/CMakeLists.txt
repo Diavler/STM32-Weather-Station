@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.22)
 #
 
 # Setup compiler settings
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
@@ -40,12 +40,14 @@ add_executable(${CMAKE_PROJECT_NAME}
         Core/Src/main_ws.cpp
         Core/Inc/bmp580.h
         Core/Src/bmp580.cpp
-        Core/Inc/helpers.h
+        ../shared/include/helpers.h
         Core/Src/helpers.cpp
         Core/Inc/bme280.h
         Core/Src/bme280.cpp
-        Core/Inc/rfm95w.h
-        Core/Src/rfm95w.cpp)
+        ../shared/include/rfm95w.h
+        ../shared/src/rfm95w.cpp
+        ../shared/include/rfm95w_interface.h
+        ../shared/include/rfm95w_constants.h)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)

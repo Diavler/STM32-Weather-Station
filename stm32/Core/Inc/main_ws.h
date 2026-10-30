@@ -17,4 +17,10 @@ void StartRadioTask(void *argument);
 }
 #endif
 
+struct sensorBundle {
+    float temperature;
+    float pressure;
+    float humidity;
+};
+
 #endif //WEATHERSTATION_WS_MAIN_H

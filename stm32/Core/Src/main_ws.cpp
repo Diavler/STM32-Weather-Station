@@ -9,7 +9,7 @@
 
 #include "bme280.h"
 #include "bmp580.h"
-#include "rfm95w.h"
+#include "../../../shared/include/rfm95w.h"
 
 // Todo: look into CMSIS2 wrappers vs FreeRTOS
 #include "FreeRTOS.h"
@@ -75,14 +75,14 @@ void main_ws() {
 }
 
 /// Temporary function to clean up errors. Todo: implement more elegant string / error handling
-static void sendUARTErrorTX() {
-    const auto msg = errorString(ErrorCode::ErrorTx);
+static void sendUARTErrorCode(ErrorCode err) {
+    const auto msg = errorString(err);
     HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
 }
 
 void StartSensorTask(void *pvParameters) {
     // TODO: implement cleaner error codes + handling
-    if (BMP580::start(&hi2c1) == ErrorCode::Failure) {
+    if (BMP580::start(&hi2c1) == ErrorCode::i2cError) {
         char startFailMsg[] = "ERROR: BMP580 failed to start.\r\n";
         HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(startFailMsg), strlen(startFailMsg), HAL_MAX_DELAY);
         vTaskDelete(nullptr);
@@ -91,7 +91,7 @@ void StartSensorTask(void *pvParameters) {
         HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(startMsg), strlen(startMsg), HAL_MAX_DELAY);
     }
 
-    if (BME280::start(&hi2c1) == ErrorCode::Failure) {
+    if (BME280::start(&hi2c1) == ErrorCode::i2cError) {
         char startFailMsg[] = "ERROR: BME280 failed to start.\r\n";
         HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(startFailMsg), strlen(startFailMsg), HAL_MAX_DELAY);
         vTaskDelete(nullptr);
@@ -106,11 +106,8 @@ void StartSensorTask(void *pvParameters) {
         const auto presRet = BMP580::readPressure();
         const auto humRet   = BME280::readHumidity();
 
-        if (tempRet == ErrorCode::ErrorRx || presRet == ErrorCode::ErrorRx || humRet == ErrorCode::ErrorRx) {
-            sendUARTErrorTX();
-        }
-        if (tempRet == ErrorCode::ErrorTx || presRet == ErrorCode::ErrorTx || humRet == ErrorCode::ErrorTx) {
-            sendUARTErrorTX();
+        for (ErrorCode err : {tempRet, presRet, humRet}) {
+            if (err == ErrorCode::i2cError) {sendUARTErrorCode(ErrorCode::i2cError);}
         }
 
         const sensorBundle sensorReading{
@@ -130,24 +127,24 @@ void StartSensorTask(void *pvParameters) {
 
 void StartRadioTask(void *pvParameters) {
     vTaskDelay(500 / portTICK_RATE_MS);
-    RFM95W::start(&hspi1);
+    if (const auto start_err = RFM95W::start(&hspi1); start_err != ErrorCode::Success) {
+        sendUARTErrorCode(start_err);
+    };
     BaseType_t taskWoken = pdTRUE;
-    constexpr TickType_t notifyTICKS = 250; // Todo: calculate proper value
 
     for (;;) {
+        constexpr TickType_t notifyTICKS = 250;
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         xTaskNotifyStateClear(xRadioTaskHandle);
         std::array<uint8_t, 32> txBuf{};
         xQueueReceive(xQueue, txBuf.data(), pdMS_TO_TICKS(1000));
-        //HAL_UART_Transmit(&huart2, txBuf.data(), txBuf.size(), HAL_MAX_DELAY);
-        auto transmitRet = RFM95W::transmit(txBuf);
-        if (transmitRet != ErrorCode::Success) {
-            sendUARTErrorTX();
+        HAL_UART_Transmit(&huart2, txBuf.data(), txBuf.size(), HAL_MAX_DELAY);
+        if (const auto transmitRet = RFM95W::transmit(txBuf); transmitRet != ErrorCode::Success) {
+            sendUARTErrorCode(transmitRet);
         }
         ulTaskNotifyTake(taskWoken, notifyTICKS);
-        auto clearRet = RFM95W::clearIRQ();
-        if (clearRet != ErrorCode::Success) {
-            sendUARTErrorTX();
+        if (const auto clearRet = RFM95W::clearIRQ(); clearRet != ErrorCode::Success) {
+            sendUARTErrorCode(clearRet);
         }
     }
     vTaskDelete(nullptr);
