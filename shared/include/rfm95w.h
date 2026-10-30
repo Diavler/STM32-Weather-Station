@@ -6,35 +6,24 @@
 #define WEATHERSTATION_RFM95W_H
 
 #include "helpers.h"
-#include "stm32f4xx_hal.h"
 #include <span>
 #include <expected>
 
-// Copy pasted from main.h: RST, G0, CS
-#define RST_Pin GPIO_PIN_7
-#define RST_GPIO_Port GPIOC
-#define G0_Pin GPIO_PIN_9
-#define G0_GPIO_Port GPIOA
-#define G0_EXTI_IRQn EXTI9_5_IRQn
-#define CS_Pin GPIO_PIN_6
-#define CS_GPIO_Port GPIOB
+#include "rfm95w_interface.h"
 
 /// RFM95W LoRa driver
 class RFM95W {
 public:
-    static ErrorCode start(SPI_HandleTypeDef* hspi);
-    static ErrorCode transmit(std::span<uint8_t> buf);
-    static ErrorCode receive(std::span<uint8_t> buf);
-    static ErrorCode clearIRQ();
+    explicit RFM95W(RFM95WInterface& interface) : m_interface(interface) {}
+    ErrorCode start();
+    ErrorCode transmit(std::span<uint8_t> buf);
+    ErrorCode receive(std::span<uint8_t> buf);
+    ErrorCode clearIRQ();
 private:
-    inline static SPI_HandleTypeDef* hspi_ptr = nullptr;
-    // Todo: change hardcoded GPIO pins to somewhere else
-    static void reset();
-    static void resetCS() { HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_RESET); }
-    static void setCS() { HAL_GPIO_WritePin(CS_GPIO_Port, CS_Pin, GPIO_PIN_SET); }
-    static std::expected<uint8_t, ErrorCode>  readRegister(uint8_t addr);
-    static ErrorCode writeRegister(uint8_t addr, uint8_t val);
-    static ErrorCode updateRegister(uint8_t addr, uint8_t mask, uint8_t val);
+    RFM95WInterface& m_interface;
+    [[nodiscard]] std::expected<uint8_t, ErrorCode>  readRegister(uint8_t addr) const;
+    ErrorCode writeRegister(uint8_t addr, uint8_t val);
+    ErrorCode updateRegister(uint8_t addr, uint8_t mask, uint8_t val);
 };
 
 struct RegWrite

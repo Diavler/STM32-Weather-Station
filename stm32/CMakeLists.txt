@@ -47,7 +47,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         ../shared/include/rfm95w.h
         ../shared/src/rfm95w.cpp
         ../shared/include/rfm95w_interface.h
-        ../shared/include/rfm95w_constants.h)
+        ../shared/include/rfm95w_constants.h
+        Core/Inc/rfm95w_stm32interface.h
+        Core/Src/rfm95w_stm32interface.cpp)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)

@@ -10,6 +10,7 @@
 #include "bme280.h"
 #include "bmp580.h"
 #include "../../../shared/include/rfm95w.h"
+#include "rfm95w_stm32interface.h"
 
 // Todo: look into CMSIS2 wrappers vs FreeRTOS
 #include "FreeRTOS.h"
@@ -127,7 +128,9 @@ void StartSensorTask(void *pvParameters) {
 
 void StartRadioTask(void *pvParameters) {
     vTaskDelay(500 / portTICK_RATE_MS);
-    if (const auto start_err = RFM95W::start(&hspi1); start_err != ErrorCode::Success) {
+    static RFM95WInterfaceSTM32 radioInterface(&hspi1, GPIOB, GPIO_PIN_6, GPIOC, GPIO_PIN_7);
+    static RFM95W radio(radioInterface);
+    if (const auto start_err = radio.start(); start_err != ErrorCode::Success) {
         sendUARTErrorCode(start_err);
     };
     BaseType_t taskWoken = pdTRUE;
@@ -139,11 +142,11 @@ void StartRadioTask(void *pvParameters) {
         std::array<uint8_t, 32> txBuf{};
         xQueueReceive(xQueue, txBuf.data(), pdMS_TO_TICKS(1000));
         HAL_UART_Transmit(&huart2, txBuf.data(), txBuf.size(), HAL_MAX_DELAY);
-        if (const auto transmitRet = RFM95W::transmit(txBuf); transmitRet != ErrorCode::Success) {
+        if (const auto transmitRet = radio.transmit(txBuf); transmitRet != ErrorCode::Success) {
             sendUARTErrorCode(transmitRet);
         }
         ulTaskNotifyTake(taskWoken, notifyTICKS);
-        if (const auto clearRet = RFM95W::clearIRQ(); clearRet != ErrorCode::Success) {
+        if (const auto clearRet = radio.clearIRQ(); clearRet != ErrorCode::Success) {
             sendUARTErrorCode(clearRet);
         }
     }

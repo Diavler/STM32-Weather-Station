@@ -5,6 +5,7 @@
 #ifndef WEATHERSTATION_RFM95W_INTERFACE_H
 #define WEATHERSTATION_RFM95W_INTERFACE_H
 #include <cstdint>
+#include <expected>
 #include <span>
 
 #include "helpers.h"
@@ -16,16 +17,15 @@ class RFM95WInterface
     public:
         RFM95WInterface(const RFM95WInterface&) = delete;
         RFM95WInterface& operator=(const RFM95WInterface&) = delete;
-        virtual ErrorCode spiTransfer(std::span<const uint8_t> tx,
-                                 std::span<uint8_t> rx);
+        virtual ErrorCode spiTransfer(std::span<const uint8_t> tx, std::span<uint8_t> rx) = 0;
         virtual void reset() = 0;
+
+    protected:
+        RFM95WInterface() = default;
+        ~RFM95WInterface() = default;
+    private:
         virtual void resetCS() = 0;
         virtual void setCS() = 0;
-
-
-
-protected:
-    ~RFM95WInterface() = default;
 
 };
 

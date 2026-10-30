@@ -7,32 +7,24 @@
 #include <array>
 /* Helper Functions */
 
-std::expected<uint8_t, ErrorCode> RFM95W::readRegister(const uint8_t addr) {
-    if (hspi_ptr == nullptr) {
-        return std::unexpected(ErrorCode::invalidArgs);
-    }
-    uint8_t tx[2] = {static_cast<uint8_t>(addr & 0x7F), 0x00};
-    uint8_t rx[2] = {0,0};
+std::expected<uint8_t, ErrorCode> RFM95W::readRegister(const uint8_t addr) const
+{
+    constexpr auto spiSize = 2;
+    std::array<uint8_t, spiSize> tx{static_cast<uint8_t>(addr & 0x7F), 0x00};
+    std::array<uint8_t, spiSize> rx{0,0};
 
-    resetCS();
-    const auto halStatus = HAL_SPI_TransmitReceive(hspi_ptr, tx, rx, 2, HAL_MAX_DELAY);
-    setCS();
-    if (halStatus != HAL_OK) return std::unexpected(ErrorCode::spiError);
+    const auto err = m_interface.spiTransfer(tx, rx);
+    if (err != ErrorCode::Success) return std::unexpected(err);
 
     return rx[1];
 }
 
 ErrorCode RFM95W::writeRegister(const uint8_t addr, const uint8_t val) {
-    if (hspi_ptr == nullptr) {
-        return ErrorCode::invalidArgs;
-    }
-    uint8_t tx[2] = {static_cast<uint8_t>(addr | 0x80), val};
-    uint8_t rx[2] = {0,0};
+    constexpr auto spiSize = 2;
+    std::array<uint8_t, spiSize> tx{static_cast<uint8_t>(addr | 0x80), 0x00};
 
-    resetCS();
-    const auto halStatus = HAL_SPI_TransmitReceive(hspi_ptr, tx, rx, 2, HAL_MAX_DELAY);
-    setCS();
-    if (halStatus != HAL_OK) return ErrorCode::spiError;
+    const auto err = m_interface.spiTransfer(tx, {});
+    if (err != ErrorCode::Success) return err;
 
     return ErrorCode::Success;
 }
@@ -47,20 +39,10 @@ ErrorCode RFM95W::updateRegister(const uint8_t addr, const uint8_t mask, const u
     return writeRegister(addr, newVal);
 }
 
-void RFM95W::reset() {
-    HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_RESET);
-    HAL_Delay(1);
-    HAL_GPIO_WritePin(RST_GPIO_Port, RST_Pin, GPIO_PIN_SET);
-    HAL_Delay(10);
-}
-
 /// Set RFM95W to LoRa mode at 915MHz
-/// @param hspi
 /// @return
-ErrorCode RFM95W::start(SPI_HandleTypeDef* hspi) {
-    if (hspi == nullptr) return ErrorCode::invalidArgs;
-    hspi_ptr = hspi;
-    reset();
+ErrorCode RFM95W::start() {
+    m_interface.reset();
 
     // Enable LoRa + Standby
     static constexpr std::array<RegUpdate, 3> updateOPMODE {{
@@ -94,12 +76,8 @@ ErrorCode RFM95W::start(SPI_HandleTypeDef* hspi) {
 
 /// Transmit a buffer with len bytes
 /// @param buf data to transmit
-/// @param len # of bytes to transmit
 /// @return
 ErrorCode RFM95W::transmit(std::span<uint8_t> buf) {
-    if (hspi_ptr == nullptr || buf.size() > MAX_PAYSIZE) {
-        return ErrorCode::invalidArgs;
-    }
     // Clear IRQ
     if (const auto err = writeRegister(REG_IRQ_FLAGS, 0xFF); err != ErrorCode::Success) return err;
 
@@ -111,12 +89,10 @@ ErrorCode RFM95W::transmit(std::span<uint8_t> buf) {
     // Set TX mode
     if (const auto err = updateRegister(REG_OPMODE, MASK_MODE, MODE_TX); err != ErrorCode::Success) return err;
 
-    // Transmit
+    // Set Payload
     if (const auto err = writeRegister(REG_PAYLEN, tx.size()-1); err != ErrorCode::Success) return err;
-    resetCS();
-    const auto halStatus = HAL_SPI_Transmit(hspi_ptr, tx.data(), tx.size(), HAL_MAX_DELAY);
-    setCS();
-    if (halStatus != HAL_OK) return ErrorCode::spiError;
+    // Transmit
+    if (const auto err = m_interface.spiTransfer(tx, {}); err != ErrorCode::Success) return err;
 
     return ErrorCode::Success;
 }
