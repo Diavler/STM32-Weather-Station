@@ -14,6 +14,7 @@
 // Todo: look into CMSIS2 wrappers vs FreeRTOS
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 #include "stm32f4xx_hal.h"
 
 /// SETUP
@@ -29,7 +30,7 @@ static StackType_t xRadioTaskStack[RT_STACK_SIZE];
 TaskHandle_t xSensorTaskHandle = nullptr;
 TaskHandle_t xRadioTaskHandle = nullptr;
 
-void vCreateSensorTask() {
+static void vCreateSensorTask() {
     xSensorTaskHandle = xTaskCreateStatic(
         StartSensorTask,
         "SENSOR TASK",
@@ -41,7 +42,7 @@ void vCreateSensorTask() {
 }
 
 
-void vCreateRadioTask() {
+static void vCreateRadioTask() {
     xRadioTaskHandle = xTaskCreateStatic(
         StartRadioTask,
         "RADIO TASK",
@@ -51,6 +52,13 @@ void vCreateRadioTask() {
         xRadioTaskStack,
         &xRadioTaskBuffer );
 }
+
+constexpr uint32_t QUEUE_LENGTH = 10;
+constexpr uint32_t ITEM_SIZE    = sizeof(sensorBundle);
+static StaticQueue_t xStaticQueue;
+static uint8_t ucQueueStorageArea[QUEUE_LENGTH * ITEM_SIZE];
+QueueHandle_t xQueue = xQueueCreateStatic(  QUEUE_LENGTH, ITEM_SIZE,
+                                            ucQueueStorageArea, &xStaticQueue);
 
 /* Import handles from STM32 generated code */
 extern I2C_HandleTypeDef hi2c1;
@@ -72,7 +80,7 @@ static void sendUARTErrorTX() {
     HAL_UART_Transmit(&huart2, reinterpret_cast<const uint8_t *>(msg), strlen(reinterpret_cast<const char *>(msg)), HAL_MAX_DELAY);
 }
 
-void StartSensorTask(void *pvParemeters) {
+void StartSensorTask(void *pvParameters) {
     // TODO: implement cleaner error codes + handling
     if (BMP580::start(&hi2c1) == ErrorCode::Failure) {
         char startFailMsg[] = "ERROR: BMP580 failed to start.\r\n";
@@ -113,27 +121,25 @@ void StartSensorTask(void *pvParemeters) {
             sensorReading.temperature, sensorReading.pressure, sensorReading.humidity);
         HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output), len, HAL_MAX_DELAY);
 
-        // Todo: implement a FreeRTOS queue that sends [temperature, pressure, humidity]
-
-        vTaskDelay(5000 / portTICK_RATE_MS);
+        xQueueSend(xQueue, &sensorReading, pdTICKS_TO_MS(5000));
+        xTaskNotifyGive(xRadioTaskHandle);
+        vTaskDelay(pdTICKS_TO_MS(5000));
     }
     vTaskDelete(nullptr);
 }
 
-void StartRadioTask(void *pvParemeters) {
+void StartRadioTask(void *pvParameters) {
     vTaskDelay(500 / portTICK_RATE_MS);
     RFM95W::start(&hspi1);
     BaseType_t taskWoken = pdTRUE;
     constexpr TickType_t notifyTICKS = 250; // Todo: calculate proper value
 
-    uint8_t tempbuf = 0;
-    std::array<char, 8> output{};
-    const int len = snprintf(output.data(), output.size(), "%d\r\n", tempbuf);
     for (;;) {
-        HAL_UART_Transmit(&huart2, reinterpret_cast<uint8_t*>(output.data()), len, HAL_MAX_DELAY);
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         xTaskNotifyStateClear(xRadioTaskHandle);
         std::array<uint8_t, 32> txBuf{};
-        txBuf[0] = 0x88; // Todo: replace dummy data with readin from senesor queue
+        xQueueReceive(xQueue, txBuf.data(), pdMS_TO_TICKS(1000));
+        //HAL_UART_Transmit(&huart2, txBuf.data(), txBuf.size(), HAL_MAX_DELAY);
         auto transmitRet = RFM95W::transmit(txBuf);
         if (transmitRet != ErrorCode::Success) {
             sendUARTErrorTX();
@@ -143,7 +149,6 @@ void StartRadioTask(void *pvParemeters) {
         if (clearRet != ErrorCode::Success) {
             sendUARTErrorTX();
         }
-        vTaskDelay(5000 / portTICK_RATE_MS);
     }
     vTaskDelete(nullptr);
 }
